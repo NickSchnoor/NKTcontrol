@@ -1,4 +1,9 @@
 % Laser Automation Test
+% For use to verify functions of NKTControl.m for SuperK Select
+% Authored by Nick Schnoor 10/27/2020
+% https://gitlab.com/rogerslab/
+
+    %   COMMANDS TO TEST:
     % * connect/disconnect
     % * emissionOn/emissionOff
     % * resetInterlock
@@ -6,11 +11,16 @@
     % * getSelectStatus*
     % * getPowerLevel/setPowerLevel
     % * getSelectChannels**
-    % * setSelectChannels***
+    % * setSelectChannels**
     % * RFon/RFoff*
     % * SetSelectCrystalGains***
     % * getTimeout/setTimeout
- 
+
+    
+%Commands IRL and in code                                                                           %What should happen
+    
+    
+    
 % Turn SuperK and Select Power on, turn interlock key, break interlock
 % button, replace. Open Vis shutter, close NIR
 
@@ -47,5 +57,6 @@ laser.emissionOn(laser), pause()                                                
 laser.setSelectChannels(laser,[1,2,3],[550,650,450],[100,100,100],[1,1,0]), pause()                 % Pretty colors
 wl=laser.getSelectChannels(laser), pause()                                                          % 3x8 matrix
 laser.setSelectChannels(laser,[1,2,3],[wl(1:3)+50],[100,100,100],[1,1,0]), pause()                  % Different pretty colors
+laser.setSelectChannels(laser,[1,2,3],[3000,700,500],[100,0,0],[1,0,0]), pause()`                   % Expect some kind of wavelength exceeding error
 laser.RFoff(laser), laser.emissionOff(laser)                                                        % Light off
 laser.disconnect(laser)                                                                             % "Laser Disconnected"
