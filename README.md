@@ -14,4 +14,6 @@ laser.emissionOn() % Should produce a beam of green and red of the same intensit
 Additionally, there's a MatLab File to test if all my functions work. I haven't gotten to test it in the lab because of COVID, but I plan to as soon as I'm able. DISCLAIMER: NOT TESTED YET
 
 
-Please note that the addresses for the laser and Select are hardcoded towards the end of the file. Furthermore, please consider contributing to this software if you are modifying it (e.g. to use with other hardware as I have here :).
+Please note that the addresses for the laser and Select are hardcoded towards the end of the file. Furthermore, please consider contributing to this software if you are modifying it (e.g. to use with other hardware as I have here :).  
+
+The serial command codes for all NKT products (SuperK Extreme, SuperK Select, RF Driver, Varia, etc.) can be found in the Register Files folder of the SuperK Connect SDK found on the NKT website.
