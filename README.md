@@ -6,7 +6,7 @@ This code gives you access to control the NKT SuperK Extreme Supercontinuum Whit
 ```
 laser = NKTControl
 laser.connect()
-laser.setSelectChannels([1,2],[550,650],[100,100],[100,100])
+laser.setSelectChannels([1,2],[550,650],[100,100])
 laser.setPowerLevel(10)
 laser.RFon()
 laser.emissionOn() % Should produce a beam of green and red of the same intensities
