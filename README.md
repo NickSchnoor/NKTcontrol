@@ -11,8 +11,6 @@ laser.setPowerLevel(10)
 laser.RFon()
 laser.emissionOn() % Should produce a beam of green and red of the same intensities
 ```
-Additionally, there's a MatLab File to test if all my functions work. I haven't gotten to test it in the lab because of COVID, but I plan to as soon as I'm able. DISCLAIMER: NOT TESTED YET
-
 
 Please note that the addresses for the laser and Select are hardcoded towards the end of the file. Furthermore, please consider contributing to this software if you are modifying it (e.g. to use with other hardware as I have here :).  
 
