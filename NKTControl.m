@@ -10,16 +10,15 @@ classdef NKTControl < handle
     %
     %Methods:
     % * connect/disconnect
+    % * getTimeout/setTimeout    
+    % * resetInterlock    
     % * emissionOn/emissionOff
-    % * resetInterlock
+    % * RFon/RFoff
     % * getSuperKStatus
-    % * getSelectStatus*
+    % * getSelectStatus
     % * getPowerLevel/setPowerLevel
-    % * getSelectChannels**
-    % * setSelectChannels**
-    % * RFon/RFoff*
-    % * SetSelectCrystalGains***
-    % * getTimeout/setTimeout
+    % * getSelectChannels/setSelectChannels**             all messed up
+
     %
     % Todo:
     % * Make all to disp-status commands "disablable"!
@@ -109,6 +108,42 @@ classdef NKTControl < handle
         end
         
         
+        function timeout = getTimeout(obj)
+            %getTimeout Obtains the timeout for the serial port in seconds.
+            %
+            % Return:
+            %  timeout Current timeout value given in seconds.
+            %
+            % see also: setTimeout
+            
+            timeout=obj.timeout;
+        end
+
+        
+        function [] = setTimeout(obj,timeout)
+            %setTimeout Sets the timeout for the serial port in seconds.
+            %
+            % This function may be useful to play around with if either
+            % communication fails or faster updates are required.
+            % Input:
+            %  timeout timeout value given in second.
+            %
+            % see also: getTimeout
+            
+            
+            obj.timeout=timeout;
+        end
+        
+        
+        function [] = resetInterlock(obj)
+            %resetInterlock Resets the interlock circuit.
+            
+            data=['32'; '01'];
+            obj.sendTelegram(obj.addrLaser,obj.msgWrite,data);
+            obj.getTelegram(8);
+        end
+        
+        
         function [] = emissionOn(obj)
             % emissionOn Turns emission on.
             %
@@ -130,31 +165,18 @@ classdef NKTControl < handle
             obj.getTelegram(8);
         end
         
-        
-        function [] = setTimeout(obj,timeout)
-            %setTimeout Sets the timeout for the serial port in seconds.
-            %
-            % This function may be useful to play around with if either
-            % communication fails or faster updates are required.
-            % Input:
-            %  timeout timeout value given in second.
-            %
-            % see also: getTimeout
-            
-            
-            obj.timeout=timeout;
+                
+        function []=RFon(obj)
+            data=['30'; '01'];
+            obj.sendTelegram(obj.addrRF,obj.msgWrite,data);
+            obj.getTelegram(8);
         end
+
         
-        
-        function timeout = getTimeout(obj)
-            %getTimeout Obtains the timeout for the serial port in seconds.
-            %
-            % Return:
-            %  timeout Current timeout value given in seconds.
-            %
-            % see also: setTimeout
-            
-            timeout=obj.timeout;
+        function []=RFoff(obj)
+            data=['30'; '00'];
+            obj.sendTelegram(obj.addrRF,obj.msgWrite,data);
+            obj.getTelegram(8);
         end
         
         
@@ -186,7 +208,7 @@ classdef NKTControl < handle
                 disp('Emission off');
             end
             if status(15)=='0'
-                disp('Interlock on');
+                disp('Interlock off');
             else
                 disp('Interlock needs resetting');
             end
@@ -211,41 +233,39 @@ classdef NKTControl < handle
             data='66';
             obj.sendTelegram(obj.addrSelect,obj.msgRead,data);
             out=obj.getTelegram(10);
-            hexdata=[out(7,:), out(6,:)];
-            decdata=hex2dec(hexdata);
-            status=dec2bin(decdata,16);
-            if status(16)==1
-                disp('Select Emission On')
-            else
-                disp('Select Emission Off')
-            end
-            if status(8)==1
+            decdata=hex2dec(out);
+            shutter=dec2bin(decdata(7),2);
+%             if decdata(10)==10
+%                 disp('Select Emission On')
+%             else
+%                 disp('Select Emission Off')
+%             end
+            if str2double(shutter(2))==0
                 disp('Vis Shutter Closed')
             else
                 disp('Vis Shutter Open')
             end
-            if status(7)==1
+            if str2double(shutter(1))==0
                 disp('NIR Shutter Closed')
             else
                 disp('NIR Shuter Open')
             end
             data='30';
             obj.sendTelegram(obj.addrSelect,obj.msgRead,data);
-            out=obj.getTelegram(10);
-            hexRF=[out(7,:) out(6,:)];
-            RF=hex2dec(hexRF);
-            if dec2bin(RF)==1
+            out=obj.getTelegram(9);
+            RF=base2dec(out(6,:),16);
+            if dec2bin(RF)=='1'
                 disp('RF on')
             else
                 disp('RF off')
             end
             data='38';
-            obj.sendTelegram(obj.addrSelect,obj.msgRead,data);
+            obj.sendTelegram(obj.addrRF,obj.msgRead,data);
             out=obj.getTelegram(10);
-            hextemp=[out(7,:), out(6,:)];
-            temp=0.1*hex2dec(hextemp);%convert units to C
+            temp=0.1*hex2dec([out(7,:), out(6,:)]);%convert units to C
             disp(['Crystal Temperature = ',num2str(temp),' degrees C'])
-            output=[status(16),status(8),status(7),RF,temp]; 
+            output=[%decdata(10),...
+                str2double(shutter(2)),str2double(shutter(1)),RF,temp]; 
         end
         
         
@@ -287,64 +307,48 @@ classdef NKTControl < handle
         end
         
         
-        function [outwl,power,gain]=getSelectChannels(obj)
+        function [wl,amplitude]=getSelectChannels(obj)
             % getSelectChannels Obtains the wavelengths, powers, and on/off status
             % of each channel of the Select filter.
             %
             % Return:
             %    wl     List of wavelengths from the 8 channels
-            %    power  List of powers from the 8 channels
-            %    gain   List of gains from the 8 channels
+            %    amplitude  List of powers from the 8 channels
             %
             % Output:
-            %   4x8 matrix with channel numbers, wavelengths, powers, gains
+            %   3x8 matrix with channel numbers, wavelengths, powers, gains
             %
             % See also: setSelectChannels
             
             
             wl=zeros(1,8);
-            power=zeros(1,8);
-            gain=zeros(1,8);
+            amplitude=zeros(1,8);
+            % gain=zeros(1,8);
             for channel=0:7
                 
                 data=['9',num2str(channel)];
-                obj.sendTelegram(obj.addrSelect,obj.msgRead,data);
-                outwl=obj.getTelegram(20);
-                
-                %Do stuff to out here to get U32 to decimal w/ 0.001 accuracy
-                outwl=base2dec(outwl,32)
-                %wl(channel+1)=;
+                obj.sendTelegram(obj.addrRF,obj.msgRead,data);
+                out=obj.getTelegram(24);
+                hexwl=[out(8,:),out(7,:),out(6,:)];
+                wl(channel+1)=hex2dec(hexwl)/1000;
                 
                 data=['B',num2str(channel)];
-                obj.sendTelegram(obj.addrSelect,obj.msgRead,data);
-                out=obj.getTelegram(10);
+                obj.sendTelegram(obj.addrRF,obj.msgRead,data);
+                out=obj.getTelegram(12);
                 hexPower=[out(7,:) out(6,:)];
-                power(channel+1)=0.1*hex2dec(hexPower);%convert units to percent
-                
-                data=['C',num2str(channel)];
-                obj.sendTelegram(obj.addrSelect,obj.msgRead,data);
-                out=obj.getTelegram(10);
-                hexGain=[out(7,:) out(6,:)];
-                gain(channel+1)=0.1*hex2dec(hexGain);%convert units to percent
+                amplitude(channel+1)=0.1*hex2dec(hexPower);%convert to percent
+%                 
+%                 data=['C',num2str(channel)];
+%                 obj.sendTelegram(obj.addrRF,obj.msgRead,data);
+%                 out=obj.getTelegram(10);
+%                 hexGain=[out(7,:) out(6,:)];
+%                 gain(channel+1)=0.1*hex2dec(hexGain);%convert units to percent
             end
-            disp([1:8;wl;power;gain])
+            disp([1:8;wl;amplitude]) %;gain])
         end
+                
         
-        
-        function []=RFon(obj)
-            data=['30'; '01'];
-            obj.sendTelegram(obj.addrRF,obj.msgWrite,data);
-            obj.getTelegram(8);
-        end
-        
-        function []=RFoff(obj)
-            data=['30'; '00'];
-            obj.sendTelegram(obj.addrRF,obj.msgWrite,data);
-            obj.getTelegram(8);
-        end
-        
-        
-        function []=setSelectChannels(channel,wavelength,power,gain)
+        function []=setSelectChannels(obj,channel,wavelength,amplitude)
             % setSelectChannel allows for manipulation of wavelength
             % channels---multiple at once!
             
@@ -352,48 +356,30 @@ classdef NKTControl < handle
             %   channel     Which channels to be changed
             %               from 1 to 8
             %   wavelength  What to change those channels' wavelengths to
-            %               from 400 to 2000 by 0.1 nm
-            %   power       What power to change those channel to
-            %               from 0 to 100% by 0.1%
-            %   gain        What gain to change the channels to
+            %               from 400 to 2000 by 0.001 nm
+            %   amplitude       What power to change those channel to
             %               from 0 to 100% by 0.1%
             %
             % See also: getSelectChannels
             
-            if isequal(size(channel),size(wavelength),size(power),size(gain))==1
+            if isequal(size(channel),size(wavelength),size(amplitude))==1
                 for n=1:length(channel)
                     
-                    u32Wavelength=dec2base(wavelength(n)*1000,32);
-                    while length(u32Wavelength)<4
-                        u32Wavelength=['0',u32Wavelength];
-                    end
-                    data=['9',num2str(channel(n)-1); u32Wavelength(3:4); u32Wavelength(1:2)];
-                    obj.sendTelegram(obj.addrSelect,obj.msgWrite,data);
-                    obj.getTelegram(20);
+                    hexwl=dec2hex(round(wavelength(n),3)*1000,6);
+                    data=['9',num2str(channel(n)-1); hexwl(5:6); hexwl(3:4); hexwl(1:2)];
+                    obj.sendTelegram(obj.addrRF,obj.msgWrite,data);
+                    obj.getTelegram(8);
                     
-                    hexPower=dec2hex(power(n)*10,4);
+                    hexPower=dec2hex(round(amplitude(n),1)*10,4);
                     data=['B',num2str(channel(n)-1);hexPower(3:4);hexPower(1:2)];
-                    obj.sendTelegram(obj.addrSelect,obj.msgRead,data);
-                    obj.getTelegram(10);
-                    
-                    hexGain=dec2hex(gain(n)*10,4);
-                    data=['C',num2str(channel(n)-1);hexGain(3:4);hexGain(1:2)];
-                    obj.sendTelegram(obj.addrSelect,obj.msgRead,data);
-                    obj.getTelegram(10);
-                end
-                
+                    obj.sendTelegram(obj.addrRF,obj.msgWrite,data);
+                    obj.getTelegram(8);
+                end               
             else
                 disp('Error: Invalid Input Vector Sizes. Make sure all inputs have same size.')
             end
         end
         
-        function [] = resetInterlock(obj)
-            %resetInterlock Resets the interlock circuit.
-            
-            data=['32'; '01'];
-            obj.sendTelegram(obj.addrLaser,obj.msgWrite,data);
-            obj.getTelegram(8);
-        end
         
     end
     
