@@ -2,11 +2,11 @@ classdef NKTControl < handle
     %NKTControl Class to control super continuum (SuperK) lasers from NKT.
     %
     % This class uses the serial communication (virtually through a USB
-    % connection) to communicate with NKT SuperK Extreme products and may
+    % connection) to communicate with NKT SuperK products and may
     % potentially work for similar systems as well. All code is tested on
-    % a SuperK Extreme EXU-6.
-    %Can obtain and change the power level and upper/lower bandwidths, turn
-    %emission on or off, and reset the interlock.
+    % a SuperK Extreme.
+    % Can turn emission on/off, RF power on/off, do laser power, and read 
+    % and manipulate all 8 Select channels.
     %
     %Methods:
     % * connect/disconnect
@@ -17,17 +17,16 @@ classdef NKTControl < handle
     % * getSuperKStatus
     % * getSelectStatus
     % * getPowerLevel/setPowerLevel
-    % * getSelectChannels/setSelectChannels**             all messed up
+    % * getSelectChannels/setSelectChannels
 
-    %
-    % Todo:
-    % * Make all to disp-status commands "disablable"!
-    % * addrLaser, addrVaria and host are at the moment hardcoded and hidden to the user
-    % * make documentation nicer (type docNKTControl)
-    % * https://uk.mathworks.com/help/matlab/matlab_prog/add-help-for-your-program.html
-    %
-    % Examples:
-    %   to come
+    % Example:
+    %   """
+    %   laser=NKTControl;
+    %   laser.connect();
+    %   laser.RFon();
+    %   laser.emissionOn();
+    %   laser.setSelectChannels([1:8],[550:557],100*ones(1,8));
+    %   """
     %
     % Authors: Jess Rigley and Villads Egede Johansen (University of Cambridge)
     % Contact: vej22@cam.ac.uk
@@ -36,7 +35,6 @@ classdef NKTControl < handle
     % Version: 1.0
     % Date: 21/08-2017
     % Copyright: MIT License (see github page)
-    
     
     
     % Adopted for RF Driver & SuperK Select AOTF combo by: Nick Schnoor
@@ -56,13 +54,16 @@ classdef NKTControl < handle
     methods
         %Public methods
         function [] = connect(obj)
-            % connect Connects to the laser.
+            % connect() Connects to the laser.
             %
             % Detects which serial ports are available and tries to connect
             % to each in turn until the laser is connected. Always first
             % method to be called.
             %
-            % see also: disconnect
+            % Displays:
+            %   "Laser Connected"
+            %
+            % See also: disconnect()
             
             warning off MATLAB:serial:fread:unsuccessfulRead;
             %Find serial ports
@@ -96,10 +97,13 @@ classdef NKTControl < handle
         
         
         function [] = disconnect(obj)
-            % disconnect Close serial port connection thus disconnecting
+            % disconnect() Closes serial port connection thus disconnecting
             % laser.
             %
-            % see also: connect
+            % Displays:
+            %   "Laser disconnected"
+            %
+            % See also: connect()
             
             fclose(obj.s);
             delete(obj.s);
@@ -109,26 +113,27 @@ classdef NKTControl < handle
         
         
         function timeout = getTimeout(obj)
-            %getTimeout Obtains the timeout for the serial port in seconds.
+            %getTimeout() Obtains timeout for the serial port in seconds.
             %
             % Return:
-            %  timeout Current timeout value given in seconds.
+            %   timeout --- Current timeout value given in seconds.
             %
-            % see also: setTimeout
+            % See also: setTimeout()
             
             timeout=obj.timeout;
         end
 
         
         function [] = setTimeout(obj,timeout)
-            %setTimeout Sets the timeout for the serial port in seconds.
+            %setTimeout() Sets the timeout for the serial port in seconds.
             %
             % This function may be useful to play around with if either
             % communication fails or faster updates are required.
+            % 
             % Input:
-            %  timeout timeout value given in second.
+            %    timeout --- Timeout value given in second.
             %
-            % see also: getTimeout
+            % See also: getTimeout()
             
             
             obj.timeout=timeout;
@@ -136,7 +141,9 @@ classdef NKTControl < handle
         
         
         function [] = resetInterlock(obj)
-            %resetInterlock Resets the interlock circuit.
+            % resetInterlock() Resets the interlock circuit.
+            %
+            % See also: getSuperKStatus()
             
             data=['32'; '01'];
             obj.sendTelegram(obj.addrLaser,obj.msgWrite,data);
@@ -145,9 +152,9 @@ classdef NKTControl < handle
         
         
         function [] = emissionOn(obj)
-            % emissionOn Turns emission on.
+            % emissionOn() Turns emission on.
             %
-            % see also: emissionOff
+            % See also: emissionOff()
             
             data=['30'; '03'];
             obj.sendTelegram(obj.addrLaser,obj.msgWrite,data);
@@ -156,9 +163,9 @@ classdef NKTControl < handle
         
         
         function [] = emissionOff(obj)
-            % emissionOff Turns emission off.
+            % emissionOff() Turns emission off.
             %
-            % see also: emissionOn
+            % See also: emissionOn()
             
             data=['30'; '00'];
             obj.sendTelegram(obj.addrLaser,obj.msgWrite,data);
@@ -167,6 +174,10 @@ classdef NKTControl < handle
         
                 
         function []=RFon(obj)
+            % RFon() Turns RF Power on.
+            %
+            % See also: RFoff()
+            
             data=['30'; '01'];
             obj.sendTelegram(obj.addrRF,obj.msgWrite,data);
             obj.getTelegram(8);
@@ -174,6 +185,10 @@ classdef NKTControl < handle
 
         
         function []=RFoff(obj)
+            % RFoff() Turns RF Power off.
+            %
+            % See also: RFon()
+            
             data=['30'; '00'];
             obj.sendTelegram(obj.addrRF,obj.msgWrite,data);
             obj.getTelegram(8);
@@ -181,17 +196,21 @@ classdef NKTControl < handle
         
         
         function output = getSuperKStatus(obj)
-            %getStatus Obtains the status of the laser.
+            % getSuperKStatus() Obtains the status of the laser.
             %
-            % Checks whether the serial port is open, whether emission is on
-            % or off, and whether the interlock needs resetting.
+            % Checks whether the serial port is open/closed, whether
+            % emission on/off, and whether the interlock needs resetting.
+            %
+            % Displays:
+            %   "Emission on" or "Emission off"
+            %   "Interlock off" or "Interlock needs resetting"
             %
             % Return:
-            %   output  Status bits about emission and interlock.
-            %            bit 1: Emission 0/1 is off/on;
-            %            bit 2: Interlock 0/1 is on/off;
-            
-            % See Also: getSelectStatus
+            %   output ---  Status bits for emission and interlock.
+            %               bit 1: Emission 0/1 is off/on;
+            %               bit 2: Interlock 0/1 is off/on;
+            %
+            % See Also: getSelectStatus()
             
             
             data='66';
@@ -201,7 +220,7 @@ classdef NKTControl < handle
             decdata=hex2dec(hexdata);
             status=dec2bin(decdata,16);
             output=[status(16), status(15)];
-            disp(['Com port ' obj.s.status]);
+            % disp(['Com port ' obj.s.status]);
             if status(16)=='1'
                 disp('Emission on');
             else
@@ -216,25 +235,34 @@ classdef NKTControl < handle
         
         
         function output = getSelectStatus(obj)
-            % getSelectStatus Obtains serial info about shutters, emission
+            % getSelectStatus() Obtains status info about the SuperK
+            %                   Select.
+            % Checks whether VIS and NIR shutters are open/closed, RF power
+            % on/off, and crystal temperature.
+            % 
+            % Displays:
+            %   "Vis Shutter Closed" or "Vis Shutter Open"
+            %   "NIR Shutter Closed" or "NIR Shutter Open"
+            %   "RF on" or "RF off"
+            %   "Crystal Temperature = ##.# degrees C"
             %
-            %   Return:
-            %       output  Status bits for emission, shutters, RF power
-            %               and Crystal temperature
-            %               bit 1: Emission 0/1 is off/on
-            %               bit 2: Vis Shutter 0/1 is open/closed
-            %               bit 3: NIR Shutter 0/1 is open/closed
-            %               bit 4: RF Power 0/1 is off/on
-            %               bit 5: Crystal Temperature should be between
-            %                      18-28 degrees C
+            % Return:
+            %   output --- Status bits for shutters, RF power, and crystal
+            %               temperature.
+            %               bit 1: Vis Shutter 0/1 is closed/open;
+            %               bit 2: NIR Shutter 0/1 is closed/open;
+            %               bit 3: RF Power 0/1 is off/on;
+            %               bit 4: Crystal temperature: should be between
+            %                      18-28 degrees C;
             %
-            % See also: getSuperKStatus, getSelectChannels
+            % See also: getSuperKStatus(), getSelectChannels()
             
             data='66';
             obj.sendTelegram(obj.addrSelect,obj.msgRead,data);
             out=obj.getTelegram(10);
             decdata=hex2dec(out);
             shutter=dec2bin(decdata(7),2);
+            % Select Emission proved to be useless:
 %             if decdata(10)==10
 %                 disp('Select Emission On')
 %             else
@@ -270,12 +298,12 @@ classdef NKTControl < handle
         
         
         function powerLevel = getPowerLevel(obj)
-            % getPowerLevel Obtain power level
+            % getPowerLevel() Obtains the SuperK Extreme power level.
             %
             % Return:
-            %   powerLevel  Power level given in percent
+            %   powerLevel --- Power level given in percent.
             %
-            % see also: setPowerLevel
+            % See also: setPowerLevel()
             
             data='37';
             obj.sendTelegram(obj.addrLaser,obj.msgRead,data);
@@ -288,13 +316,13 @@ classdef NKTControl < handle
         
         function [] = setPowerLevel(obj,powerLevel)
             
-            % setPowerLevel Set power level
+            % setPowerLevel() Sets theSuperK Extreme power level.
             %
             % Input:
-            %   powerLevel  Desired power level 
-            %               from 0 to 100% by 0.1%
+            %   powerLevel --- Desired power level in percent. 
+            %                   From 0 to 100 by 0.1;
             %
-            % see also: getPowerLevel
+            % See also: getPowerLevel()
             
             powerLevel2=10*powerLevel; %convert units to 0.1%
             %convert power level to two bytes
@@ -308,17 +336,22 @@ classdef NKTControl < handle
         
         
         function [wl,amplitude]=getSelectChannels(obj)
-            % getSelectChannels Obtains the wavelengths, powers, and on/off status
-            % of each channel of the Select filter.
+            % getSelectChannels() Obtains the wavelengths and amplitudes of
+            %                       all eight channels of the Select.
+            %
+            % Displays:
+            %   3x8 matrix with channel numbers, wavelengths, and 
+            %       amplitudes as rows.
             %
             % Return:
-            %    wl     List of wavelengths from the 8 channels
-            %    amplitude  List of powers from the 8 channels
+            %    wl --- List of wavelengths from all eight channels.
+            %           A 1x8 vector with wavelengths in nm with up to 
+            %           three decimal place precision.
+            %    amplitude --- List of amplitudes from all eight channels.
+            %                  A 1x8 vector with amplitudes in percent with
+            %                  up to one decimal place precision.
             %
-            % Output:
-            %   3x8 matrix with channel numbers, wavelengths, powers, gains
-            %
-            % See also: setSelectChannels
+            % See also: setSelectChannels()
             
             
             wl=zeros(1,8);
@@ -337,7 +370,7 @@ classdef NKTControl < handle
                 out=obj.getTelegram(12);
                 hexPower=[out(7,:) out(6,:)];
                 amplitude(channel+1)=0.1*hex2dec(hexPower);%convert to percent
-%                 
+                % Channel gains not have any useful information
 %                 data=['C',num2str(channel)];
 %                 obj.sendTelegram(obj.addrRF,obj.msgRead,data);
 %                 out=obj.getTelegram(10);
@@ -349,18 +382,23 @@ classdef NKTControl < handle
                 
         
         function []=setSelectChannels(obj,channel,wavelength,amplitude)
-            % setSelectChannel allows for manipulation of wavelength
-            % channels---multiple at once!
-            
-            % Inputs:
-            %   channel     Which channels to be changed
-            %               from 1 to 8
-            %   wavelength  What to change those channels' wavelengths to
-            %               from 400 to 2000 by 0.001 nm
-            %   amplitude       What power to change those channel to
-            %               from 0 to 100% by 0.1%
+            % setSelectChannels() Allows for manipulation of up to all 
+            %                     eight channels of the Select at once.
             %
-            % See also: getSelectChannels
+            % Set wavelengths and amplitudes. Make amplitude=0 to turn
+            % a channel off.
+            %
+            % Inputs:
+            %   channel --- Which channels to be changed.
+            %               A vector with integer values from 1 to 8.
+            %   wavelength --- What to change the channels' wavelengths to.
+            %                  A vector with values from 400 to 2000.
+            %                  In nm. Up to three decimal place precision.
+            %   amplitude --- What to change the channels' amplitudes to
+            %                 A vector with values from 0 to 100.
+            %                 In percent. Up to one decimal place precision
+            %
+            % See also: getSelectChannels()
             
             if isequal(size(channel),size(wavelength),size(amplitude))==1
                 for n=1:length(channel)
